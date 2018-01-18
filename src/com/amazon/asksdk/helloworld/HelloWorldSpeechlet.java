@@ -9,16 +9,11 @@
  */
 package com.amazon.asksdk.helloworld;
 
+import com.amazon.speech.speechlet.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
 import com.amazon.speech.slu.Intent;
-import com.amazon.speech.speechlet.IntentRequest;
-import com.amazon.speech.speechlet.LaunchRequest;
-import com.amazon.speech.speechlet.SessionEndedRequest;
-import com.amazon.speech.speechlet.SessionStartedRequest;
-import com.amazon.speech.speechlet.SpeechletV2;
-import com.amazon.speech.speechlet.SpeechletResponse;
 import com.amazon.speech.json.SpeechletRequestEnvelope;
 import com.amazon.speech.ui.PlainTextOutputSpeech;
 import com.amazon.speech.ui.Reprompt;
@@ -31,11 +26,16 @@ import com.amazon.speech.ui.OutputSpeech;
 public class HelloWorldSpeechlet implements SpeechletV2 {
     private static final Logger log = LoggerFactory.getLogger(HelloWorldSpeechlet.class);
 
+    private static final String att_PingingFor = "PingingFor";
+    private static final String pingingFor_Meal = "Meal";
+    private static final String pingingFor_MealConfirmation = "Meal Confirm";
+
     @Override
     public void onSessionStarted(SpeechletRequestEnvelope<SessionStartedRequest> requestEnvelope) {
         log.info("onSessionStarted requestId={}, sessionId={}", requestEnvelope.getRequest().getRequestId(),
                 requestEnvelope.getSession().getSessionId());
         log.info("OnSessionStarted");
+        requestEnvelope.getSession().setAttribute("PingingFor", pingingFor_Meal);
         // any initialization logic goes here
     }
 
@@ -44,37 +44,29 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
         log.info("onLaunch requestId={}, sessionId={}", requestEnvelope.getRequest().getRequestId(),
                 requestEnvelope.getSession().getSessionId());
         log.info("OnLaunch");
+
         return getWelcomeResponse();
     }
 
     @Override
     public SpeechletResponse onIntent(SpeechletRequestEnvelope<IntentRequest> requestEnvelope) {
         IntentRequest request = requestEnvelope.getRequest();
+        Session currentSession = requestEnvelope.getSession();
         log.info("onIntent requestId={}, sessionId={}", request.getRequestId(),
                 requestEnvelope.getSession().getSessionId());
         log.info("OnIntent");
 
         Intent intent = request.getIntent();
         String intentName = (intent != null) ? intent.getName() : null;
-        //return SpeechletResponse.newTellResponse(getPlainTextOutputSpeech("Intent = " + intentName));
 
-        /*if ("HelloWorldIntent".equals(intentName)) {
-            return getHelloResponse();
-        } else if ("AMAZON.HelpIntent".equals(intentName)) {
-            return getHelpResponse();
-        } else if ("test".equals(intentName)) {
-            return getHelpResponse();
-        }else {
-            return getAskResponse("HelloWorld", "This is unsupported.  Please try something else.");
-        }*/
-
-        switch (intentName)
+        return getOrder_MealResponse(intent, currentSession);
+        /*switch (intentName)
         {
             case "AMAZON.HelpIntent": return getHelpResponse();
             case "test": return getTestResponse();
-            case "Order_Meal": return getOrder_MealResponse();
+            case "Order_Meal": return getOrder_MealResponse(intent, currentSession);
             default: return getAskResponse("HelloWorld", "This is unsupported.  Please try something else.");
-        }
+        }*/
     }
 
     @Override
@@ -95,14 +87,60 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
         return SpeechletResponse.newTellResponse(speech);
     }
 
-    private SpeechletResponse getOrder_MealResponse() {
-        String speechText = "Order Meal";
+    private SpeechletResponse getOrder_MealResponse(Intent intent, Session session) {
 
+        switch ((String) session.getAttribute("PingingFor"))
+        {
+            case pingingFor_Meal: return orderMeal(intent, session);
+            case pingingFor_MealConfirmation: return confirmMeal(intent, session);
 
-        // Create the plain text output.
-        PlainTextOutputSpeech speech = getPlainTextOutputSpeech(speechText);
+            default: return tell("Unknown PingingFor Value. Value received as: " + (String) session.getAttribute("PingingFor") );
+        }
+    }
 
-        return SpeechletResponse.newTellResponse(speech);
+    private SpeechletResponse orderMeal(Intent intent, Session session) {
+        String speechText = "";
+        if(intent.getName().matches("Order_Meal"))
+        {
+            if (intent.getSlot("meal").getValue() != null) {
+                try {
+                    speechText = "Ordering specific meal: " + intent.getSlot("meal").getValue() + " Is this correct?";// Create the plain text output.
+                    session.setAttribute(att_PingingFor, pingingFor_MealConfirmation);
+                    return ask(speechText, speechText);
+                } catch (Exception e) {
+                    speechText = "Error: " + e.toString();
+                }
+
+            } else {
+
+                try {
+                    speechText = "What would you like to order? "; //+ intent.getSlot("meal");
+                    return ask(speechText, speechText);
+                } catch (Exception e) {
+                    speechText = "Error: " + e.toString();
+                }
+            }
+            return tell("Error: Something went horribly wrong in orderMeal");
+        }
+        return tell("Error: in orderMeal Incorrect Intent: " + intent.getName());
+    }
+
+    private SpeechletResponse confirmMeal(Intent intent, Session session) {
+        String speechText = "";
+        if(intent.getName().matches("Yes"))
+        {
+            speechText = "Order Confirmed";// Create the plain text output.
+            //session.setAttribute(att_PingingFor, pingingFor_MealConfirmation);
+            return tell(speechText);
+
+        }
+        else if (intent.getName().matches("No"))
+        {
+            speechText = "Order Canceled. What would you like to order instead?";// Create the plain text output.
+            session.setAttribute(att_PingingFor, pingingFor_Meal);
+            return ask(speechText, speechText);
+        }
+        return tell("Error: in confirmMeal Incorrect Intent: " + intent.getName());
     }
 
     /**
@@ -138,7 +176,7 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
      * @return SpeechletResponse spoken and visual response for the given intent
      */
     private SpeechletResponse getHelpResponse() {
-        String speechText = "You can say hello to me!";
+        String speechText = "Placeholder Response to Help Intent!";
         return getAskResponse("HelloWorld", speechText);
     }
 
@@ -193,5 +231,21 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
         Reprompt reprompt = getReprompt(speech);
 
         return SpeechletResponse.newAskResponse(speech, reprompt, card);
+    }
+
+    private SpeechletResponse tell(String speechText)
+    {
+        PlainTextOutputSpeech speech = getPlainTextOutputSpeech(speechText);
+        return SpeechletResponse.newTellResponse(speech);
+    }
+
+    private SpeechletResponse ask(String speechText, String promptText)
+    {
+        PlainTextOutputSpeech speech = getPlainTextOutputSpeech(speechText);
+        PlainTextOutputSpeech promptOutput = getPlainTextOutputSpeech(promptText);
+        Reprompt prompt = new Reprompt();
+        prompt.setOutputSpeech(promptOutput);
+
+        return SpeechletResponse.newAskResponse(speech, prompt);
     }
 }
