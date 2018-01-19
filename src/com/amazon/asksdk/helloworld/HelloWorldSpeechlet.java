@@ -9,7 +9,12 @@
  */
 package com.amazon.asksdk.helloworld;
 
+import com.amazon.speech.slu.Slot;
 import com.amazon.speech.speechlet.*;
+import com.amazon.speech.speechlet.dialog.directives.DelegateDirective;
+import com.amazon.speech.speechlet.dialog.directives.DialogDirective;
+import com.amazon.speech.speechlet.dialog.directives.DialogIntent;
+import com.amazon.speech.speechlet.dialog.directives.ElicitSlotDirective;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -19,6 +24,10 @@ import com.amazon.speech.ui.PlainTextOutputSpeech;
 import com.amazon.speech.ui.Reprompt;
 import com.amazon.speech.ui.SimpleCard;
 import com.amazon.speech.ui.OutputSpeech;
+
+import java.awt.*;
+import java.lang.reflect.Method;
+import java.util.*;
 
 /**
  * This sample shows how to create a simple speechlet for handling speechlet requests.
@@ -59,14 +68,15 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
         Intent intent = request.getIntent();
         String intentName = (intent != null) ? intent.getName() : null;
 
-        return getOrder_MealResponse(intent, currentSession);
-        /*switch (intentName)
+        //return getOrder_MealResponse(intent, currentSession);
+        switch (intentName)
         {
             case "AMAZON.HelpIntent": return getHelpResponse();
-            case "test": return getTestResponse();
+            case "test": if(allSlotsFilled(intent)){ return tell("true");}else {return tell("false");}
             case "Order_Meal": return getOrder_MealResponse(intent, currentSession);
+            case "MealDialog": return launchDialog(requestEnvelope, "Order Complete with all data retrieved");
             default: return getAskResponse("HelloWorld", "This is unsupported.  Please try something else.");
-        }*/
+        }
     }
 
     @Override
@@ -88,6 +98,11 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
     }
 
     private SpeechletResponse getOrder_MealResponse(Intent intent, Session session) {
+
+        if(intent.getName().matches("MealDialog"))
+        {
+            return tell("Potato");
+        }
 
         switch ((String) session.getAttribute("PingingFor"))
         {
@@ -247,5 +262,103 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
         prompt.setOutputSpeech(promptOutput);
 
         return SpeechletResponse.newAskResponse(speech, prompt);
+    }
+
+    private SpeechletResponse launchDialog(SpeechletRequestEnvelope<IntentRequest> requestEnvelope, String completeDialog) {
+        IntentRequest request = requestEnvelope.getRequest();
+        if (!request.getDialogState().toString().matches("COMPLETED"))
+        {
+            // Create updatedIntent and prefill information if needed
+            DialogIntent updatedIntent = new DialogIntent(request.getIntent());
+            DelegateDirective delegateDirective = new DelegateDirective();
+            delegateDirective.setUpdatedIntent(updatedIntent);
+
+            java.util.List<Directive> directives = new ArrayList<>();
+            directives.add(delegateDirective);
+
+            // Create SpeechletResponse
+            SpeechletResponse response = new SpeechletResponse();
+            response.setDirectives(directives);
+            response.setNullableShouldEndSession(false);
+            return response;
+        }
+        else
+        {
+            //slotAllFilled(); //Next Step logic
+            if(requestEnvelope.getRequest().getIntent().getName().matches("MealDialog"))
+            {
+                switch (requestEnvelope.getRequest().getIntent().getSlot("Meal").getValue())
+                {
+                    case "meal 1":
+                        if(requestEnvelope.getRequest().getIntent().getSlot("Allergy").getValue().equalsIgnoreCase("Mushrooms"))
+                        {
+                            return ask("Allergy Alert: Meal One contains mushrooms. Aborting Order.", "Allergy Alert: Meal One contains mushrooms. Aborting Order.");
+                        }
+                        return tell("Order Confirmed. Ordering Meal One");
+                    case "meal 2":
+                        if(requestEnvelope.getRequest().getIntent().getSlot("Allergy").getValue().equalsIgnoreCase("Sesame Seeds"))
+                        {
+                            return ask("Allergy Alert: Meal Two contains Sesame Seeds. Aborting Order.", "Allergy Alert: Meal Two contains Sesame Seeds. Aborting Order.");
+                        }
+                        return tell("Order Confirmed. Ordering Meal Two");
+                    case "meal 3":
+                        if(requestEnvelope.getRequest().getIntent().getSlot("Allergy").getValue().equalsIgnoreCase("Mushrooms"))
+                        {
+                            return ask("Allergy Alert: Meal Three contains mushrooms. Aborting Order.", "Allergy Alert: Meal Three contains mushrooms. Aborting Order.");
+                        }
+                        return tell("Order Confirmed. Ordering Meal Three");
+                    default:
+                        return launchSlotDialog(requestEnvelope, "Meal","We do not currently serve " + requestEnvelope.getRequest().getIntent().getSlot("Meal").getValue() + ", please choose something else", completeDialog);
+                }
+            }
+            return tell(completeDialog);
+        }
+    }
+
+    private SpeechletResponse launchSlotDialog(SpeechletRequestEnvelope<IntentRequest> requestEnvelope, String slotToElicit, String promptSpeech, String dialogCompleteSpeech) {
+        IntentRequest request = requestEnvelope.getRequest();
+        if (!request.getDialogState().toString().matches("COMPLETED"))
+        {
+            // Create updatedIntent and prefill information if needed
+            DialogIntent updatedIntent = new DialogIntent(request.getIntent());
+            ElicitSlotDirective dialogDirective = new ElicitSlotDirective();
+            dialogDirective.setUpdatedIntent(updatedIntent);
+            dialogDirective.setSlotToElicit(slotToElicit);
+
+            java.util.List<Directive> directives = new ArrayList<>();
+            directives.add(dialogDirective);
+
+            // Create SpeechletResponse
+            SpeechletResponse response = new SpeechletResponse();
+            response.setDirectives(directives);
+            response.setNullableShouldEndSession(false);
+            PlainTextOutputSpeech aPlainTextOutputSpeech = getPlainTextOutputSpeech(promptSpeech);
+            response.setOutputSpeech(aPlainTextOutputSpeech);
+            return response;
+        }
+        else
+        {
+            return tell(promptSpeech);
+        }
+    }
+
+    //Returns true if NONE of the Slots in the intent are null. (Slots do not have to be required slots)
+    private boolean allSlotsFilled(Intent anIntent)
+    {
+        if(anIntent.getSlots().size() < 1)
+        {
+            return true;
+        }
+        else
+        {
+            ArrayList<Slot> slots = new ArrayList<Slot>(anIntent.getSlots().values());
+
+            for (Slot aSlot : slots) {
+                if (aSlot.getValue() == null) {
+                    return false;
+                }
+            }
+            return true;
+        }
     }
 }
