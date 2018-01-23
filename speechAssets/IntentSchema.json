@@ -1,25 +1,281 @@
 {
-  "intents": [
+  "languageModel": {
+    "types": [
+      {
+        "name": "boolean",
+        "values": [
+          {
+            "id": null,
+            "name": {
+              "value": "true",
+              "synonyms": [
+                "yes",
+                "true",
+                "okay"
+              ]
+            }
+          },
+          {
+            "id": null,
+            "name": {
+              "value": "false",
+              "synonyms": [
+                "no",
+                "false",
+                "not okay"
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "MealType",
+        "values": [
+          {
+            "id": null,
+            "name": {
+              "value": "Meal 1",
+              "synonyms": [
+                "beef"
+              ]
+            }
+          },
+          {
+            "id": null,
+            "name": {
+              "value": "Meal 2",
+              "synonyms": [
+                "chicken"
+              ]
+            }
+          },
+          {
+            "id": null,
+            "name": {
+              "value": "Meal 3",
+              "synonyms": [
+                "burger"
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "intents": [
+      {
+        "name": "AMAZON.CancelIntent",
+        "samples": []
+      },
+      {
+        "name": "AMAZON.HelpIntent",
+        "samples": []
+      },
+      {
+        "name": "AMAZON.StopIntent",
+        "samples": []
+      },
+      {
+        "name": "MealDialog",
+        "samples": [
+          "launch dialog"
+        ],
+        "slots": [
+          {
+            "name": "Meal",
+            "type": "MealType",
+            "samples": [
+              "meal one",
+              "meal two",
+              "meal three"
+            ]
+          },
+          {
+            "name": "Allergy",
+            "type": "AMAZON.Food",
+            "samples": [
+              "Fish",
+              "Sesame Seeds",
+              "Peanuts",
+              "Mushrooms",
+              "None"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "Order_Meal",
+        "samples": [
+          "Order {orderedmeal}",
+          "I want {orderedmeal}",
+          "for {orderedmeal}",
+          "{orderedmeal} please",
+          "give me {orderedmeal}",
+          "I'll have {orderedmeal}",
+          "I'll have the {orderedmeal}",
+          "order a meal",
+          "order a {orderedmeal} for me",
+          "a {orderedmeal}"
+        ],
+        "slots": [
+          {
+            "name": "orderedmeal",
+            "type": "AMAZON.Food"
+          }
+        ]
+      },
+      {
+        "name": "registerAllergies",
+        "samples": [
+          "register my allergies",
+          "I want to register allergies",
+          "i have some allergies",
+          "register allergies for {userID}",
+          "test register allergy {newAllergy}",
+          "register {userID}  {newAllergy} {endOfAllergies}"
+        ],
+        "slots": [
+          {
+            "name": "userID",
+            "type": "AMAZON.NUMBER"
+          },
+          {
+            "name": "newAllergy",
+            "type": "AMAZON.Food"
+          },
+          {
+            "name": "endOfAllergies",
+            "type": "boolean"
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "samples": [
+          "test",
+          "to test",
+          "test a slot {SlotA} ",
+          "test both slots {SlotA} {SlotB}"
+        ],
+        "slots": [
+          {
+            "name": "SlotA",
+            "type": "AMAZON.Person"
+          },
+          {
+            "name": "SlotB",
+            "type": "AMAZON.Person"
+          }
+        ]
+      }
+    ],
+    "invocationName": "vida android"
+  },
+  "prompts": [
     {
-      "intent": "AMAZON.CancelIntent"
-    },
-    {
-      "intent": "AMAZON.HelpIntent"
-    },
-    {
-      "intent": "AMAZON.StopIntent"
-    },
-    {
-      "slots": [
+      "id": "Elicit.Intent-MealDialog.IntentSlot-Meal",
+      "variations": [
         {
-          "name": "meal",
-          "type": "MealType"
+          "type": "PlainText",
+          "value": "What meal do you wish to order?"
         }
-      ],
-      "intent": "Order_Meal"
+      ]
     },
     {
-      "intent": "test"
+      "id": "Confirm.Intent-MealDialog.IntentSlot-Meal",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "You have ordered {Meal} . Is that correct?"
+        }
+      ]
+    },
+    {
+      "id": "Elicit.Intent-MealDialog.IntentSlot-Allergy",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "What are your allergies?"
+        }
+      ]
+    },
+    {
+      "id": "Confirm.Intent-MealDialog.IntentSlot-Allergy",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "You are allergic to {Allergy} is this correct?"
+        }
+      ]
+    },
+    {
+      "id": "Confirm.Intent-registerAllergies",
+      "variations": [
+        {
+          "type": "PlainText",
+          "value": "So you allergies are .... Is this correct?"
+        }
+      ]
     }
-  ]
+  ],
+  "dialog": {
+    "intents": [
+      {
+        "name": "MealDialog",
+        "confirmationRequired": false,
+        "prompts": {},
+        "slots": [
+          {
+            "name": "Meal",
+            "type": "MealType",
+            "elicitationRequired": true,
+            "confirmationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.Intent-MealDialog.IntentSlot-Meal",
+              "confirmation": "Confirm.Intent-MealDialog.IntentSlot-Meal"
+            }
+          },
+          {
+            "name": "Allergy",
+            "type": "AMAZON.Food",
+            "elicitationRequired": true,
+            "confirmationRequired": true,
+            "prompts": {
+              "elicitation": "Elicit.Intent-MealDialog.IntentSlot-Allergy",
+              "confirmation": "Confirm.Intent-MealDialog.IntentSlot-Allergy"
+            }
+          }
+        ]
+      },
+      {
+        "name": "registerAllergies",
+        "confirmationRequired": true,
+        "prompts": {
+          "confirmation": "Confirm.Intent-registerAllergies"
+        },
+        "slots": [
+          {
+            "name": "userID",
+            "type": "AMAZON.NUMBER",
+            "elicitationRequired": false,
+            "confirmationRequired": false,
+            "prompts": {}
+          },
+          {
+            "name": "newAllergy",
+            "type": "AMAZON.Food",
+            "elicitationRequired": false,
+            "confirmationRequired": false,
+            "prompts": {}
+          },
+          {
+            "name": "endOfAllergies",
+            "type": "boolean",
+            "elicitationRequired": false,
+            "confirmationRequired": false,
+            "prompts": {}
+          }
+        ]
+      }
+    ]
+  }
 }

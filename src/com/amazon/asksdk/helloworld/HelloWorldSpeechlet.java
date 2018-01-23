@@ -11,10 +11,7 @@ package com.amazon.asksdk.helloworld;
 
 import com.amazon.speech.slu.Slot;
 import com.amazon.speech.speechlet.*;
-import com.amazon.speech.speechlet.dialog.directives.DelegateDirective;
-import com.amazon.speech.speechlet.dialog.directives.DialogDirective;
-import com.amazon.speech.speechlet.dialog.directives.DialogIntent;
-import com.amazon.speech.speechlet.dialog.directives.ElicitSlotDirective;
+import com.amazon.speech.speechlet.dialog.directives.*;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 
@@ -31,6 +28,8 @@ import java.util.*;
 
 /**
  * This sample shows how to create a simple speechlet for handling speechlet requests.
+ *
+ * Build command: mvn assembly:assembly -DdescriptorId=jar-with-dependencies package
  */
 public class HelloWorldSpeechlet implements SpeechletV2 {
     private static final Logger log = LoggerFactory.getLogger(HelloWorldSpeechlet.class);
@@ -39,12 +38,26 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
     private static final String pingingFor_Meal = "Meal";
     private static final String pingingFor_MealConfirmation = "Meal Confirm";
 
+
+    /** [registerAllergies Logic] */
+    private static final String att_lastSlotElicited = "RA_lastElicit";
+    private static final String RA_lastElicited_ID = "1";
+    private static final String RA_lastElicited_newAllergy = "2";
+    private static final String RA_lastElicited_noMoreAllergies = "3";
+    private static final String att_allAllergies = "RA_allAllergies";
+    private static final String att_reqisterAllergiesStage = "RA_Stage";
+    private static final String RA_Stage_LookingForID = "1";
+    private static final String RA_Stage_LookingForAllergies = "2";
+    /** [/registerAllergies Logic] */
+
+
     @Override
     public void onSessionStarted(SpeechletRequestEnvelope<SessionStartedRequest> requestEnvelope) {
         log.info("onSessionStarted requestId={}, sessionId={}", requestEnvelope.getRequest().getRequestId(),
                 requestEnvelope.getSession().getSessionId());
         log.info("OnSessionStarted");
         requestEnvelope.getSession().setAttribute("PingingFor", pingingFor_Meal);
+        requestEnvelope.getSession().setAttribute(att_reqisterAllergiesStage, RA_Stage_LookingForID);
         // any initialization logic goes here
     }
 
@@ -75,7 +88,8 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
             case "test": if(allSlotsFilled(intent)){ return tell("true");}else {return tell("false");}
             case "Order_Meal": return getOrder_MealResponse(intent, currentSession);
             case "MealDialog": return launchDialog(requestEnvelope, "Order Complete with all data retrieved");
-            default: return getAskResponse("HelloWorld", "This is unsupported.  Please try something else.");
+            case "registerAllergies": /*return tell("Slots: " + intent.getSlot("allAllergies").getValue());*/ return registerAllergiesLogic(requestEnvelope, "Allergies Registered");
+            default: return getAskResponse("HelloWorld", "This is unsupported.  Please try something else. Intent: " + intent.getName());
         }
     }
 
@@ -264,9 +278,58 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
         return SpeechletResponse.newAskResponse(speech, prompt);
     }
 
+    private SpeechletResponse elicit(SpeechletRequestEnvelope<IntentRequest> requestEnvelope, String slotToElicit, String promptSpeech) {
+        IntentRequest request = requestEnvelope.getRequest();
+
+            // Create updatedIntent and prefill information if needed
+            DialogIntent updatedIntent = new DialogIntent(request.getIntent());
+            ElicitSlotDirective dialogDirective = new ElicitSlotDirective();
+            dialogDirective.setUpdatedIntent(updatedIntent);
+            dialogDirective.setSlotToElicit(slotToElicit);
+
+            java.util.List<Directive> directives = new ArrayList<>();
+            directives.add(dialogDirective);
+
+            // Create SpeechletResponse
+            SpeechletResponse response = new SpeechletResponse();
+            response.setDirectives(directives);
+            response.setNullableShouldEndSession(false);
+            PlainTextOutputSpeech aPlainTextOutputSpeech = getPlainTextOutputSpeech(promptSpeech);
+            response.setOutputSpeech(aPlainTextOutputSpeech);
+            return response;
+    }
+
+    /*private SpeechletResponse elicitAndChangeSlot(SpeechletRequestEnvelope<IntentRequest> requestEnvelope, String slotToElicit, String promptSpeech, String slotToChange, String slotNewValue) {
+        IntentRequest request = requestEnvelope.getRequest();
+        Map<String, Slot> newSlots = request.getIntent().getSlots();
+        DialogSlot a = new DialogSlot()
+        newSlots.remove("newAllergy");
+
+
+
+        // Create updatedIntent and prefill information if needed
+        DialogIntent updatedIntent = new DialogIntent(request.getIntent());
+        updatedIntent.setSlots(newSlots);
+        ElicitSlotDirective dialogDirective = new ElicitSlotDirective();
+        dialogDirective.setUpdatedIntent(updatedIntent);
+        dialogDirective.setSlotToElicit(slotToElicit);
+
+        java.util.List<Directive> directives = new ArrayList<>();
+        directives.add(dialogDirective);
+
+        // Create SpeechletResponse
+        SpeechletResponse response = new SpeechletResponse();
+        response.setDirectives(directives);
+        response.setNullableShouldEndSession(false);
+        PlainTextOutputSpeech aPlainTextOutputSpeech = getPlainTextOutputSpeech(promptSpeech);
+        response.setOutputSpeech(aPlainTextOutputSpeech);
+        return response;
+    }*/
+
+
     private SpeechletResponse launchDialog(SpeechletRequestEnvelope<IntentRequest> requestEnvelope, String completeDialog) {
         IntentRequest request = requestEnvelope.getRequest();
-        if (!request.getDialogState().toString().matches("COMPLETED"))
+        if (/*!request.getDialogState().toString().matches("COMPLETED") &&*/ !allSlotsFilled(request.getIntent()))
         {
             // Create updatedIntent and prefill information if needed
             DialogIntent updatedIntent = new DialogIntent(request.getIntent());
@@ -338,8 +401,53 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
         }
         else
         {
-            return tell(promptSpeech);
+            return tell(dialogCompleteSpeech);
         }
+    }
+
+    private SpeechletResponse registerAllergiesLogic(SpeechletRequestEnvelope<IntentRequest> requestEnvelope, String dialogCompleteSpeech) {
+        IntentRequest request = requestEnvelope.getRequest();
+        Intent intent = request.getIntent();
+        Session session = requestEnvelope.getSession();
+
+        if(intent.getSlot("userID").getValue() == null)
+        {
+            session.setAttribute(att_lastSlotElicited, RA_lastElicited_ID);
+            return elicit(requestEnvelope, "userID", "What is your user ID?");
+        }
+
+        String lastSlotThatWasElicited = session.getAttribute(att_lastSlotElicited).toString();
+        switch (lastSlotThatWasElicited)
+        {
+            case RA_lastElicited_ID:
+                if(intent.getSlot("userID") != null)
+                {
+                    session.setAttribute(att_lastSlotElicited, RA_lastElicited_newAllergy);
+                    return elicit(requestEnvelope,"newAllergy", "What is one of your allergies?");
+                }
+                break;
+            case RA_lastElicited_newAllergy:
+                if(intent.getSlot("newAllergy") != null)
+                {
+                    session.setAttribute(att_allAllergies, session.getAttribute(att_allAllergies) + intent.getSlot("newAllergy").getValue() + " , ");
+                    session.setAttribute(att_lastSlotElicited, RA_lastElicited_noMoreAllergies);
+                    return elicit(requestEnvelope,"endOfAllergies", "Is that all?");
+                }
+                break;
+            case RA_lastElicited_noMoreAllergies:
+
+                if(intent.getSlot("endOfAllergies").getValue().matches("false"))
+                {
+                    session.setAttribute(att_lastSlotElicited, RA_lastElicited_newAllergy);
+                    return elicit(requestEnvelope, "newAllergy", "What is one of your allergies?");
+                }
+                else
+                {
+                    return tell("Allegeries Recorded");
+                }
+        }
+
+        return tell("Error: Somewhere in registerAllergiesLogic there was an error hat cause the logic to reach the end of the method.");
     }
 
     //Returns true if NONE of the Slots in the intent are null. (Slots do not have to be required slots)
