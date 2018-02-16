@@ -7,7 +7,7 @@
 
     or in the "license" file accompanying this file. This file is distributed on an "AS IS" BASIS, WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the License for the specific language governing permissions and limitations under the License.
  */
-package com.amazon.asksdk.helloworld;
+package com.amazon.asksdk.cqevida;
 
 import com.amazon.speech.slu.Slot;
 import com.amazon.speech.speechlet.*;
@@ -22,8 +22,6 @@ import com.amazon.speech.ui.Reprompt;
 import com.amazon.speech.ui.SimpleCard;
 import com.amazon.speech.ui.OutputSpeech;
 
-import java.awt.*;
-import java.lang.reflect.Method;
 import java.util.*;
 
 /**
@@ -31,8 +29,8 @@ import java.util.*;
  *
  * Build command: mvn assembly:assembly -DdescriptorId=jar-with-dependencies package
  */
-public class HelloWorldSpeechlet implements SpeechletV2 {
-    private static final Logger log = LoggerFactory.getLogger(HelloWorldSpeechlet.class);
+public class CQEVidaSpeechlet implements SpeechletV2 {
+    private static final Logger log = LoggerFactory.getLogger(CQEVidaSpeechlet.class);
 
     private static final String att_PingingFor = "PingingFor";
     private static final String pingingFor_Meal = "Meal";
@@ -84,6 +82,7 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
         //return getOrder_MealResponse(intent, currentSession);
         switch (intentName)
         {
+            case "launch": return getTestResponse("Launch!");
             case "AMAZON.HelpIntent": return getHelpResponse();
             case "test": if(allSlotsFilled(intent)){ return tell("true");}else {return tell("false");}
             case "Order_Meal": return getOrder_MealResponse(intent, currentSession);
@@ -101,8 +100,8 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
         log.info("OnSessionEnded");
     }
 
-    private SpeechletResponse getTestResponse() {
-        String speechText = "Test Successful";
+    private SpeechletResponse getTestResponse(String inText) {
+        String speechText = "Test Successful: " + inText;
 
 
         // Create the plain text output.
@@ -112,7 +111,6 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
     }
 
     private SpeechletResponse getOrder_MealResponse(Intent intent, Session session) {
-
         if(intent.getName().matches("MealDialog"))
         {
             return tell("Potato");
@@ -347,6 +345,7 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
         }
         else
         {
+            printLog("Fish");
             //slotAllFilled(); //Next Step logic
             if(requestEnvelope.getRequest().getIntent().getName().matches("MealDialog"))
             {
@@ -450,6 +449,8 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
         return tell("Error: Somewhere in registerAllergiesLogic there was an error hat cause the logic to reach the end of the method.");
     }
 
+
+
     //Returns true if NONE of the Slots in the intent are null. (Slots do not have to be required slots)
     private boolean allSlotsFilled(Intent anIntent)
     {
@@ -468,5 +469,34 @@ public class HelloWorldSpeechlet implements SpeechletV2 {
             }
             return true;
         }
+    }
+
+    private Map<String,DialogSlot> copyAndChangeSlots(Intent anIntent, ArrayList<String> slotsToBeChangedKeys, ArrayList<String> slotsToBeChangedValues)
+    {
+        Map<String,DialogSlot> dialogSlots = new HashMap<String,DialogSlot>();
+
+        Iterator iter = anIntent.getSlots().entrySet().iterator();
+        log.debug("Building DialogIntent");
+        while (iter.hasNext())
+        {
+            Map.Entry pair = (Map.Entry) iter.next();
+            DialogSlot dialogSlot = new DialogSlot();
+            Slot slot = (Slot) pair.getValue();
+            dialogSlot.setName(slot.getName());
+            dialogSlot.setValue(slot.getValue());
+            dialogSlots.put((String) pair.getKey(), dialogSlot);
+        }
+
+        int i = 0;
+        for (String aKey: slotsToBeChangedKeys) {
+            dialogSlots.get(aKey).setValue(slotsToBeChangedValues.get(i));
+            i++;
+        }
+        return dialogSlots;
+    }
+
+    private void printLog(String text)
+    {
+        log.debug("onIntent, inside dialogueState IF statement");
     }
 }
